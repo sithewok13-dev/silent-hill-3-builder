@@ -11,8 +11,8 @@ for the phone, 60 fps, and controller support.
 - A free [GitHub account](https://github.com/signup).
 - **Your copy of Silent Hill 3 for PC** as one file in Google Drive or Dropbox: the game's ISO, or the installed
   game's folder zipped (the one with sh3.exe; any of .iso, .zip, .7z, .rar). Share it as **Anyone with the link**.
-- A way to install apps on your iPhone: [Feather](https://github.com/khcrysalis/Feather),
-  [SideStore](https://sidestore.io), [AltStore](https://altstore.io) or Sideloadly.
+- A way to install apps that aren't from the App Store (see **Installing** below). The free one is
+  [SideStore](https://sidestore.io): it needs only your normal Apple ID, and a computer once to set it up.
 - About **8 GB** free on the iPhone (iOS 15 or later; an iPhone from 2020 or newer is best).
 
 ## Make it (4 steps, about 30 minutes, mostly waiting)
@@ -26,17 +26,31 @@ for the phone, 60 fps, and controller support.
 3. **Wait.** It takes about 20–30 minutes. A green tick means it's done; a red cross shows what went wrong in plain
    words when you tap it. You can close the page and come back.
 4. **Install it.** Tap **Releases** on your copy's front page (on a phone: scroll down):
-   - In **Silent Hill 3 app**, tap **SH3.ipa** and open it in Feather (or your installer).
+   - In **Silent Hill 3 app**, tap **SH3.ipa**, then open it with SideStore (or your installer).
    - In **Game files**, download every **SH3-game-N.zip**. Then in the **Files** app, move them from
      *Downloads* to **On My iPhone > Silent Hill 3** (that folder appears once the app is installed).
 
 Start the app. The first time, it unpacks the zips (a few minutes, with a progress bar) and then deletes them.
 
+## Installing
+
+The app isn't from the App Store, so your iPhone needs a sideloading app to install it. Pick one:
+
+| | Cost | Computer needed? | Good to know |
+|---|---|---|---|
+| **[SideStore](https://sidestore.io)** (easiest free one) | Free, your normal Apple ID | Once, to set it up | Apps last 7 days; open SideStore and tap **Refresh** to renew them. Up to 3 apps. |
+| **[AltStore](https://altstore.io)** | Free | Yes, every week (AltServer) | Apps last 7 days |
+| **Sideloadly** | Free | Yes, each install | Apps last 7 days |
+| **[Feather](https://github.com/khcrysalis/Feather)** | Needs a paid Apple developer account or certificate | No | Apps last as long as the certificate |
+
+With a free Apple ID, iOS gives apps less memory space than the game normally reserves; the app then runs with a
+smaller amount (see `guest arena` in its log). A paid developer account removes that limit.
+
 ## Updating the app
 
 When the port gets new features: in your copy, tap **Actions > Build Silent Hill 3 for iPhone > Run workflow**,
-leave the link **empty**, and run it. Only the app is rebuilt (about 15 minutes); install the new SH3.ipa over
-the old one. Your game files and saves stay as they are.
+leave the link **empty**, and run it. Only the app is rebuilt (about 15 minutes); install the new SH3.ipa the same way
+as before. Your game files and saves stay as they are.
 
 ## Playing
 
