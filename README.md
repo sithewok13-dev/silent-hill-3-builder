@@ -13,7 +13,7 @@ for the phone, 60 fps, and controller support.
   game's folder zipped (the one with sh3.exe; any of .iso, .zip, .7z, .rar). Share it as **Anyone with the link**.
 - A way to install apps that aren't from the App Store (see **Installing** below): free with
   [SideStore](https://sidestore.io) (your normal Apple ID, and a computer once to set it up), or with no computer
-  through a paid signing service or Feather with an Apple Developer account.
+  through a paid signing service (about $20 a year) or Feather with an Apple Developer account.
 - About **8 GB** free on the iPhone (iOS 15 or later; an iPhone from 2020 or newer is best).
 
 ## Make it (4 steps, about 30 minutes, mostly waiting)
@@ -42,8 +42,8 @@ The app isn't from the App Store, so your iPhone needs a sideloading app to inst
 | **[SideStore](https://sidestore.io)** (easiest free one) | Free, your normal Apple ID | Once, to set it up | Apps last 7 days; open SideStore and tap **Refresh** to renew them. Up to 3 apps. |
 | **[AltStore](https://altstore.io)** | Free | Yes, every week (AltServer) | Apps last 7 days |
 | **Sideloadly** | Free | Yes, each install | Apps last 7 days |
-| **A signing service** such as [Signulous](https://www.signulous.com) | Paid yearly subscription | No | Upload the IPA to their site and install it from there. Third-party services, not affiliated with this project; Apple sometimes revokes their certificates, and then the app stops opening until the service re-signs it. |
-| **[Feather](https://github.com/khcrysalis/Feather)** | Needs your own **paid Apple Developer account** ($99 a year) | No | Install with your account's certificate; apps last a year. |
+| **A signing service**: [Signulous](https://www.signulous.com) or [UDID Registrations](https://www.udidregistrations.com) | About $20 a year | No | Upload the IPA to their site and install it from there. UDID Registrations also gives you certificate files that work in Feather. Third-party services, not affiliated with this project; Apple sometimes revokes their certificates, and then the app stops opening until the service re-signs it. |
+| **[Feather](https://github.com/khcrysalis/Feather)** (or [AppDB PLUS](https://appdb.to), about €12 a year) | Needs your own **paid Apple Developer account** ($99 a year) or a signing service's certificate files | No | Install with that certificate; apps last as long as it does. |
 
 With a free Apple ID, iOS gives apps less memory space than the game normally reserves; the app then runs with a
 smaller amount (see `guest arena` in its log). A paid Apple Developer account removes that limit.
