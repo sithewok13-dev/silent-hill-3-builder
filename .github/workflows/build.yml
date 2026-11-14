@@ -1,0 +1,229 @@
+# Builds Silent Hill 3 for iPhone from YOUR copy of the game, in this (private) repo. See README.md.
+#
+#   1. game  (Linux)  downloads your game from the link you give and puts the game files in this repo's
+#                     "game-files" release as zips for your phone. Skipped when you leave the link empty (the files
+#                     from last time are kept).
+#   2. app   (Mac)    turns your game's sh3.exe into C with the port (github.com/sithewok13-dev/sh3-nx), compiles
+#                     the app and puts SH3.ipa in this repo's "app" release.
+#
+# Everything made from your game stays in this repo: keep it private.
+name: Build Silent Hill 3 for iPhone
+on:
+  workflow_dispatch:
+    inputs:
+      game_link:
+        description: "Link to your Silent Hill 3 PC game (Google Drive, Dropbox, or a download link to an .iso, .zip, .7z or .rar). Leave it empty to only update the app."
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  PORT_REPO: sithewok13-dev/sh3-nx
+  PORT_REF: ios
+  # the retail sh3.exe the port is made for, and the same build with a few bytes patched (also recompiles)
+  EXE_SHA1: aa2aca6dba19bf510c9c2e92eefdc15e98266581 d851669ef609b3164e3581aa8dcfbfaec866cb79
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
+jobs:
+  game:
+    if: ${{ inputs.game_link != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Room on the disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h / | tail -1
+
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq 7zip p7zip-full >/dev/null 2>&1 || sudo apt-get install -y -qq p7zip-full >/dev/null
+          echo "Z=$(command -v 7zz || command -v 7z)" >> "$GITHUB_ENV"
+          pip install -q gdown
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PORT_REPO }}
+          ref: ${{ env.PORT_REF }}
+          path: port
+
+      - name: Download your game
+        env:
+          LINK: ${{ inputs.game_link }}
+        run: |
+          case "$LINK" in
+            *drive.google.com*|*docs.google.com*)
+              gdown --quiet --fuzzy "$LINK" -O download || {
+                echo "::error::Google Drive would not hand over the file. In Drive, tap the file's ⋮ > Share > General access: Anyone with the link, then copy the link again."
+                exit 1; } ;;
+            *dropbox.com*)
+              case "$LINK" in *dl=0*) url=$(echo "$LINK" | sed 's/dl=0/dl=1/') ;; *\?*) url="$LINK&dl=1" ;; *) url="$LINK?dl=1" ;; esac
+              curl -fsSL --retry 3 -o download "$url" || {
+                echo "::error::Dropbox would not hand over the file. Share it with 'Anyone with the link' and copy that link."; exit 1; } ;;
+            *)
+              curl -fsSL --retry 3 -o download "$LINK" || { echo "::error::Could not download the link. Check that it opens without signing in."; exit 1; } ;;
+          esac
+          if head -c 512 download | grep -qi "<html"; then
+            echo "::error::The link gave a web page, not your game. Use a link anyone can open (for Google Drive: Share > Anyone with the link)."
+            exit 1
+          fi
+          echo "downloaded $(du -h download | cut -f1)"
+
+      - name: Unpack it and find the game
+        run: |
+          mkdir in
+          "$Z" x -y -oin download >/dev/null || { echo "::error::Could not unpack the download. It should be an .iso, .zip, .7z or .rar of the game."; exit 1; }
+          rm download
+          # an archive inside the archive (an .iso in a .zip, say): unpack that too
+          inner=$(find in -maxdepth 3 -type f \( -iname '*.iso' -o -iname '*.zip' -o -iname '*.7z' -o -iname '*.rar' \) -size +100M | head -1)
+          if [ -n "$inner" ]; then mkdir in2 && "$Z" x -y -oin2 "$inner" >/dev/null && rm -rf in && mv in2 in; fi
+          # the game folder: the one with sh3.exe and data/
+          exe=$(find in -type f -iname sh3.exe | while read -r f; do [ -d "$(dirname "$f")/data" ] && echo "$f"; done | head -1)
+          [ -n "$exe" ] || { echo "::error::No Silent Hill 3 game folder in the download (one with sh3.exe and a data folder). Use your installed PC game's folder, zipped, or the game's ISO."; exit 1; }
+          mv "$(dirname "$exe")" game && rm -rf in
+          [ -f game/sh3.exe ] || mv "game/$(basename "$exe")" game/sh3.exe
+          case " $EXE_SHA1 " in *" $(sha1sum game/sh3.exe | cut -d' ' -f1) "*) ;;
+            *) echo "::error::Your sh3.exe is not the version the port is made for (the PC release's original exe, 3,338,240 bytes). Use an unmodified copy of the game."; exit 1 ;;
+          esac
+          mkdir -p game/savedata
+          du -sh game
+
+      - name: The game files as zips for your phone
+        run: |
+          python3 - <<'PY'
+          import os, zipfile
+          files = ['sh3.exe']  # first: the app build reads it from the start of SH3-game-1.zip
+          for top in ('data', 'savedata'):
+              for root, dirs, names in os.walk(os.path.join('game', top)):
+                  dirs.sort()
+                  files += [os.path.relpath(os.path.join(root, n), 'game') for n in sorted(names)]
+          limit, part, size, z = 1900 * 1000 * 1000, 0, 0, None
+          for rel in files:
+              n = os.path.getsize(os.path.join('game', rel))
+              if z is None or size + n > limit:
+                  if z: z.close()
+                  part, size = part + 1, 0
+                  z = zipfile.ZipFile(f'SH3-game-{part}.zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=1, allowZip64=False)
+              z.write(os.path.join('game', rel), rel)
+              if rel == 'sh3.exe':
+                  z.writestr('savedata/', b'')  # the folder saves go in, even when empty
+              size += n
+          z.close()
+          print(f'{len(files)} files in {part} zips')
+          PY
+          ls -lh SH3-game-*.zip
+
+      - name: Upload them to the "game-files" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete game-files --yes --cleanup-tag -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create game-files SH3-game-*.zip -R "$GITHUB_REPOSITORY" --title "Game files" --latest=false \
+            --notes "Download every SH3-game-N.zip, move them to Files > On My iPhone > Silent Hill 3, and start the app: it unpacks them itself, then deletes the zips."
+
+  app:
+    needs: game
+    if: ${{ !cancelled() && (needs.game.result == 'success' || needs.game.result == 'skipped') }}
+    runs-on: macos-15
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PORT_REPO }}
+          ref: ${{ env.PORT_REF }}
+          path: port
+
+      - name: sh3.exe from your game files (the start of SH3-game-1.zip)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/game-files" --jq '.assets[] | select(.name=="SH3-game-1.zip") | .url' 2>/dev/null || true)
+          [ -n "$url" ] || { echo "::error::No game files yet. Run the build again and paste the link to your game in the first box."; exit 1; }
+          curl -fsSL -r 0-15999999 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" "$url" -o zip-start.bin
+          mkdir -p game
+          python3 - <<'PY'
+          import struct, zlib
+          b, at = open('zip-start.bin', 'rb').read(), 0
+          while True:
+              sig, _, flags, method, _, _, crc, csize, usize, fnlen, exlen = struct.unpack_from('<IHHHHHIIIHH', b, at)
+              assert sig == 0x04034B50, 'SH3-game-1.zip is not a zip'
+              name, start = b[at + 30:at + 30 + fnlen].decode(), at + 30 + fnlen + exlen
+              if name == 'sh3.exe': break
+              at = start + csize
+          raw = b[start:start + csize]
+          exe = zlib.decompressobj(-15).decompress(raw) if method == 8 else raw
+          assert len(exe) == usize and zlib.crc32(exe) == crc, 'sh3.exe is damaged'
+          open('game/sh3.exe', 'wb').write(exe)
+          PY
+          rm zip-start.bin
+          case " $EXE_SHA1 " in *" $(shasum game/sh3.exe | cut -d' ' -f1) "*) ;; *) echo "::error::sh3.exe is not the version the port is made for: run the build again with your game's link."; exit 1 ;; esac
+
+      - name: Turn the game's code into C
+        run: |
+          brew install ninja >/dev/null
+          cd port
+          python3 -m venv .venv > /dev/null
+          .venv/bin/pip install -q -r requirements.txt > /dev/null
+          ln -s ../game game
+          tools/regen.sh > ../regen.log 2>&1 || { echo "::error::Turning the game into C failed"; tail -20 ../regen.log; exit 1; }
+          echo "generated $(ls src/recomp/gen | wc -l | tr -d ' ') files"
+
+      - name: The app's ready-made parts (SDL2, ANGLE; nothing of the game)
+        id: parts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          deps=ios-deps-$(shasum -a 256 port/tools/ios/build-deps.sh | cut -c1-16).tar.xz
+          angle=angle-$(shasum -a 256 port/tools/ios/build-angle.sh | cut -c1-16).tar.xz
+          base=https://github.com/$PORT_REPO/releases/download/ios-parts
+          mkdir -p port/build
+          if curl -fsSL --retry 3 "$base/$deps" | tar -xJ -C port/build; then echo "parts: $deps"; else echo "deps=build" >> "$GITHUB_OUTPUT"; fi
+          if curl -fsSL --retry 3 "$base/$angle" | tar -xJ -C port/build; then echo "parts: $angle"; else echo "angle=build" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Build SDL2 (only when no ready-made ones match)
+        if: steps.parts.outputs.deps == 'build'
+        run: port/tools/ios/build-deps.sh > deps.log 2>&1 || { tail -40 deps.log; exit 1; }
+
+      - name: Build ANGLE (only when no ready-made one matches; about an hour)
+        if: steps.parts.outputs.angle == 'build'
+        run: |
+          sudo rm -rf ~/Library/Android /usr/local/share/dotnet ~/.dotnet /usr/local/lib/node_modules || true
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          ANGLE_WORK="$RUNNER_TEMP/angle" port/tools/ios/build-angle.sh > angle.log 2>&1 || { tail -80 angle.log; exit 1; }
+          sudo xcode-select -r
+
+      - name: Build the app
+        run: |
+          owner=$(echo "$GITHUB_REPOSITORY_OWNER" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9')
+          cmake -S port -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-w \
+            -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+            -DSH2_IOS_BUNDLE_ID="com.${owner:-player}.sh3" -DSH2_IOS_BUILD="$GITHUB_RUN_NUMBER" \
+            -DSH2_IOS_DEPS="$PWD/port/build/ios-deps" > build.log 2>&1 &&
+          cmake --build build >> build.log 2>&1 || { echo "::error::The app did not compile"; grep -E "error" build.log | grep -v "recomp/gen" | head -30; exit 1; }
+          day=$(date -u +%F); echo "SW_BUILD_DATE=$day" >> "$GITHUB_ENV"
+          /usr/libexec/PlistBuddy -c "Add :SWBuildNumber string $GITHUB_RUN_NUMBER" -c "Add :SWBuildDate string $day" \
+            build/SH3.app/Info.plist
+          mkdir Payload && cp -R build/SH3.app Payload/ && zip -qr SH3.ipa Payload
+          echo "SH3.ipa: $(du -h SH3.ipa | cut -f1)"
+
+      - name: Put SH3.ipa in the "app" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view app -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create app -R "$GITHUB_REPOSITORY" --title "Silent Hill 3 app" \
+              --notes "Download SH3.ipa and open it in Feather, SideStore, AltStore or Sideloadly to install it."
+          gh release upload app SH3.ipa --clobber -R "$GITHUB_REPOSITORY"
+          gh release edit app -R "$GITHUB_REPOSITORY" \
+            --notes "Build $GITHUB_RUN_NUMBER · $SW_BUILD_DATE. Download SH3.ipa and open it in Feather, SideStore, AltStore or Sideloadly to install it."
+          {
+            echo "## Done"
+            echo "- **The app:** ${{ github.server_url }}/${{ github.repository }}/releases/tag/app"
+            echo "- **Your game files:** ${{ github.server_url }}/${{ github.repository }}/releases/tag/game-files"
+          } >> "$GITHUB_STEP_SUMMARY"
